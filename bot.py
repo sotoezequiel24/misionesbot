@@ -1,10 +1,27 @@
 import os
+from flask import Flask
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, ChatMemberHandler, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, ChatMemberHandler, CallbackQueryHandler, CommandHandler
 
 TOKEN = os.getenv("TOKEN")
 
+# ===== WEB (mantener activo) =====
+app_web = Flask(__name__)
 
+@app_web.route('/')
+def home():
+    return "Bot activo"
+
+def run_web():
+    app_web.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run_web)
+    t.start()
+
+
+# ===== MENÚ =====
 def menu_principal():
     keyboard = [
         [
@@ -12,77 +29,77 @@ def menu_principal():
             InlineKeyboardButton("🟢 Zona Sur", callback_data="sur")
         ],
         [
-            InlineKeyboardButton("🔵 Zona Centro", callback_data="centro"),
-            InlineKeyboardButton("🟡 Zona Norte", callback_data="norte")
-        ],
-        [
+            InlineKeyboardButton("🟡 Zona Norte", callback_data="norte"),
             InlineKeyboardButton("🟠 Zona Este", callback_data="este")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
+# ===== /start =====
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 Bienvenido/a a MisionesChat\n\nElegí tu zona 👇",
+        reply_markup=menu_principal()
+    )
+
+
+# ===== NUEVOS USUARIOS =====
 async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    for user in update.message.new_chat_members:
+    if update.message and update.message.new_chat_members:
         await update.message.reply_text(
-            "👋 ¡Bienvenido/a a MisionesChat!\n\nElegí tu zona 👇",
+            "👋 Bienvenido/a a MisionesChat\n\nElegí tu zona 👇",
             reply_markup=menu_principal()
         )
 
 
+# ===== BOTONES =====
 async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "capital":
-        texto = "🟣 Zona Capital\n\nIncluye:\n• Posadas\n• Garupá\n• Fachinal"
-        keyboard = [
-            [InlineKeyboardButton("✅ Unirme", url="https://t.me/MisionesChatCapital")],
-            [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-        ]
+    data = query.data
 
-    elif query.data == "sur":
-        texto = "🟢 Zona Sur\n\nIncluye:\n• Candelaria\n• Santa Ana\n• Apóstoles\n• San José"
-        keyboard = [
-            [InlineKeyboardButton("✅ Unirme", url="https://t.me/MisionesChatSur")],
-            [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-        ]
+    links = {
+        "capital": ("🟣 Zona Capital\n\nPosadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
+        "sur": ("🟢 Zona Sur\n\nCandelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
+        "norte": ("🟡 Zona Norte\n\nEldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
+        "este": ("🟠 Zona Este\n\nSan Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
+    }
 
-    elif query.data == "centro":
-        texto = "🔵 Zona Centro\n\nIncluye:\n• Oberá\n• Cerro Azul\n• Campo Viera\n• San Vicente"
-        keyboard = [
-            [InlineKeyboardButton("✅ Unirme", url="https://t.me/MisionesChatCentro")],
-            [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-        ]
-
-    elif query.data == "norte":
-        texto = "🟡 Zona Norte\n\nIncluye:\n• Eldorado\n• Montecarlo\n• Iguazú"
-        keyboard = [
-            [InlineKeyboardButton("✅ Unirme", url="https://t.me/MisionesChatNorte")],
-            [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-        ]
-
-    elif query.data == "este":
-        texto = "🟠 Zona Este\n\nIncluye:\n• Irigoyen\n• San Antonio\n• San Pedro"
-        keyboard = [
-            [InlineKeyboardButton("✅ Unirme", url="https://t.me/MisionesChatEste")],
-            [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-        ]
-
-    elif query.data == "volver":
+    if data == "volver":
         await query.edit_message_text(
             "Elegí tu zona 👇",
             reply_markup=menu_principal()
         )
         return
 
-    await query.edit_message_text(texto, reply_markup=InlineKeyboardMarkup(keyboard))
+    texto, link = links.get(data, ("Error", "#"))
+
+    keyboard = [
+        [InlineKeyboardButton("✅ Unirme", url=link)],
+        [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
+    ]
+
+    await query.edit_message_text(
+        texto,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 
-app = ApplicationBuilder().token(TOKEN).build()
+# ===== INICIO =====
+if __name__ == "__main__":
+    if not TOKEN:
+        print("❌ ERROR: Falta TOKEN")
+    else:
+        print("✅ Bot funcionando...")
 
-app.add_handler(ChatMemberHandler(new_member, ChatMemberHandler.CHAT_MEMBER))
-app.add_handler(CallbackQueryHandler(botones))
+        keep_alive()
 
-print("Bot funcionando...")
-app.run_polling()
+        app = ApplicationBuilder().token(TOKEN).build()
+
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(ChatMemberHandler(new_member, ChatMemberHandler.CHAT_MEMBER))
+        app.add_handler(CallbackQueryHandler(botones))
+
+        app.run_polling()
