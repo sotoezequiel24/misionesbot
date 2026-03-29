@@ -5,8 +5,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
+    CommandHandler,
     CallbackQueryHandler,
-    ChatMemberHandler
+    MessageHandler,
+    filters
 )
 
 # ===== TOKEN =====
@@ -25,8 +27,7 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
-
-# ===== MENÚ =====
+# ===== MENÚ PRINCIPAL =====
 def menu_principal():
     keyboard = [
         [
@@ -40,8 +41,7 @@ def menu_principal():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
-# ===== BOTONES =====
+# ===== MENÚ BOTONES =====
 async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -70,23 +70,36 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(texto, reply_markup=keyboard)
 
-
-# ===== SALUDO AUTOMÁTICO NUEVOS MIEMBROS =====
+# ===== SALUDO NUEVOS MIEMBROS =====
 async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    status = update.chat_member.new_chat_member.status
-    if status == "member":  # cuando un usuario entra al grupo
-        user = update.chat_member.new_chat_member.user
+    if not update.message.new_chat_members:
+        return
+    for user in update.message.new_chat_members:
         nombre = user.first_name or "amigo"
+        text = (
+            f"👋 ¡Hola {nombre}!\n\n"
+            "Bienvenido/a a MisionesChat.\n\n"
+            "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+        )
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=(
-                f"👋 ¡Hola {nombre}!\n\n"
-                "Bienvenido/a a MisionesChat.\n\n"
-                "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
-            ),
+            text=text,
             reply_markup=menu_principal()
         )
 
+# ===== COMANDO /START PRIVADO =====
+async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nombre = update.effective_user.first_name or "amigo"
+    text = (
+        f"👋 ¡Hola {nombre}!\n\n"
+        "Bienvenido/a a MisionesChat.\n\n"
+        "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+    )
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        reply_markup=menu_principal()
+    )
 
 # ===== INICIO =====
 if __name__ == "__main__":
@@ -97,8 +110,11 @@ if __name__ == "__main__":
         keep_alive()
 
         app = ApplicationBuilder().token(TOKEN).build()
+
+        # Handlers
+        app.add_handler(CommandHandler("start", start_comando))
         app.add_handler(CallbackQueryHandler(botones))
-        app.add_handler(ChatMemberHandler(saludar_nuevo, ChatMemberHandler.CHAT_MEMBER))
+        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
 
         # Ejecuta el bot
         app.run_polling()
