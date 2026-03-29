@@ -1,18 +1,20 @@
 import os
+from flask import Flask
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
+    CommandHandler,
+    CallbackQueryHandler,
     MessageHandler,
     filters
 )
-from flask import Flask
-from threading import Thread
 
 # ===== TOKEN =====
 TOKEN = os.getenv("TOKEN")
 
-# ===== WEB (Keep Alive) =====
+# ===== WEB (Railway) =====
 app_web = Flask(__name__)
 
 @app_web.route('/')
@@ -39,28 +41,61 @@ def menu_principal():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ===== SALUDO NUEVOS MIEMBROS =====
-async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🟢 Evento de nuevo miembro recibido")  # Debug: ver si llega la actualización
-    if not update.message or not update.message.new_chat_members:
-        print("❌ No hay nuevos miembros")
+# ===== BOTONES =====
+async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    links = {
+        "capital": ("🟣 Zona Capital\n\nPosadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
+        "sur": ("🟢 Zona Sur\n\nCandelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
+        "norte": ("🟡 Zona Norte\n\nEldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
+        "este": ("🟠 Zona Este\n\nSan Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
+    }
+
+    if data == "volver":
+        await query.edit_message_text("👇 Seleccioná tu zona:", reply_markup=menu_principal())
         return
 
+    texto, link = links.get(data, ("Error", "#"))
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Unirme", url=link)],
+        [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
+    ])
+    await query.edit_message_text(texto, reply_markup=keyboard)
+
+# ===== SALUDO NUEVOS MIEMBROS =====
+async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.new_chat_members:
+        return
     for user in update.message.new_chat_members:
         nombre = user.first_name or "amigo"
-        print(f"👤 Nuevo miembro detectado: {nombre}")  # Debug: nombre recibido
-
         text = (
             f"👋 ¡Hola {nombre}!\n\n"
             "Bienvenido/a a MisionesChat.\n\n"
             "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
         )
-
+        print(f"🟢 Nuevo miembro detectado: {nombre}")  # Para logs
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=text,
             reply_markup=menu_principal()
         )
+
+# ===== COMANDO /START PRIVADO =====
+async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nombre = update.effective_user.first_name or "amigo"
+    text = (
+        f"👋 ¡Hola {nombre}!\n\n"
+        "Bienvenido/a a MisionesChat.\n\n"
+        "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+    )
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        reply_markup=menu_principal()
+    )
 
 # ===== INICIO =====
 if __name__ == "__main__":
@@ -72,7 +107,9 @@ if __name__ == "__main__":
 
         app = ApplicationBuilder().token(TOKEN).build()
 
-        # Handler solo para nuevos miembros
+        # Handlers
+        app.add_handler(CommandHandler("start", start_comando))
+        app.add_handler(CallbackQueryHandler(botones))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
 
         # Ejecuta el bot
