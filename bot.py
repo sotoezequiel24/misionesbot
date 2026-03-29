@@ -38,10 +38,11 @@ def menu_principal():
 
 # ===== /start =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Bienvenido/a a MisionesChat\n\nElegí tu zona 👇",
-        reply_markup=menu_principal()
-    )
+    await context.bot.send_message(
+    chat_id=update.effective_chat.id,
+    text="👋 Bienvenido a MisionesChat\n\nElegí tu zona:",
+    reply_markup=menu()
+)
 
 
 # ===== NUEVOS USUARIOS =====
