@@ -48,21 +48,26 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     links = {
-        "capital": ("🟣 Zona Capital\n\nPosadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
-        "sur": ("🟢 Zona Sur\n\nCandelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
-        "norte": ("🟡 Zona Norte\n\nEldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
-        "este": ("🟠 Zona Este\n\nSan Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
+        "capital": ("🟣 Zona Capital\nIncluye: Posadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
+        "sur": ("🟢 Zona Sur\nIncluye: Candelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
+        "norte": ("🟡 Zona Norte\nIncluye: Eldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
+        "este": ("🟠 Zona Este\nIncluye: San Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
     }
 
     if data == "volver":
-        await query.edit_message_text("👇 Seleccioná tu zona:", reply_markup=menu_principal())
+        await query.edit_message_text(
+            "👇 Seleccioná tu zona:",
+            reply_markup=menu_principal()
+        )
         return
 
     texto, link = links.get(data, ("Error", "#"))
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Unirme", url=link)],
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
     ])
+
     await query.edit_message_text(texto, reply_markup=keyboard)
 
 # ===== SALUDO NUEVOS MIEMBROS =====
@@ -73,23 +78,26 @@ async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nombre = user.first_name or "amigo"
         text = (
             f"👋 ¡Hola {nombre}!\n\n"
-            "Bienvenido/a a MisionesChat.\n\n"
-            "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+            "Bienvenido/a al bot oficial de la comunidad MisionesChat.\n\n"
+            "📍 Por favor seleccioná tu zona para unirte al grupo correspondiente:\n"
+            "- Zona Capital: Posadas, Garupá, Fachinal\n"
+            "- Zona Sur: Candelaria, Santa Ana, Apóstoles\n"
+            "- Zona Norte: Eldorado, Montecarlo, Iguazú\n"
+            "- Zona Este: San Pedro, Irigoyen, San Antonio"
         )
-        print(f"🟢 Nuevo miembro detectado: {nombre}")  # Para logs
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=text,
             reply_markup=menu_principal()
         )
 
-# ===== COMANDO /START PRIVADO =====
+# ===== COMANDO /START =====
 async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nombre = update.effective_user.first_name or "amigo"
     text = (
         f"👋 ¡Hola {nombre}!\n\n"
-        "Bienvenido/a a MisionesChat.\n\n"
-        "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+        "Bienvenido/a al bot oficial de MisionesChat.\n\n"
+        "📍 Seleccioná tu zona para unirte al grupo correspondiente y recibir las notificaciones:"
     )
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
