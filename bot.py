@@ -6,8 +6,7 @@ from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     CallbackQueryHandler,
-    MessageHandler,
-    filters
+    ChatMemberHandler
 )
 
 # ===== TOKEN =====
@@ -74,16 +73,17 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== SALUDO AUTOMÁTICO NUEVOS MIEMBROS =====
 async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    for user in update.message.new_chat_members:
+    status = update.chat_member.new_chat_member.status
+    if status == "member":  # cuando un usuario entra al grupo
+        user = update.chat_member.new_chat_member.user
         nombre = user.first_name or "amigo"
-        text = (
-            f"👋 ¡Hola {nombre}!\n\n"
-            "Bienvenido/a a MisionesChat.\n\n"
-            "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
-        )
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=text,
+            text=(
+                f"👋 ¡Hola {nombre}!\n\n"
+                "Bienvenido/a a MisionesChat.\n\n"
+                "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+            ),
             reply_markup=menu_principal()
         )
 
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
         app = ApplicationBuilder().token(TOKEN).build()
         app.add_handler(CallbackQueryHandler(botones))
-        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
+        app.add_handler(ChatMemberHandler(saludar_nuevo, ChatMemberHandler.CHAT_MEMBER))
 
         # Ejecuta el bot
         app.run_polling()
