@@ -100,5 +100,5 @@ if __name__ == "__main__":
         app.add_handler(CallbackQueryHandler(botones))
         app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
 
-        # Solo esto, sin corchetes ni return extra
+        # Ejecuta el bot
         app.run_polling()
