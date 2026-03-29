@@ -7,8 +7,7 @@ from telegram.ext import (
     ContextTypes,
     CommandHandler,
     CallbackQueryHandler,
-    MessageHandler,
-    filters
+    ChatMemberHandler,
 )
 
 # ===== TOKEN =====
@@ -27,6 +26,7 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
+
 # ===== MENÚ PRINCIPAL =====
 def menu_principal():
     keyboard = [
@@ -40,6 +40,7 @@ def menu_principal():
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
+
 
 # ===== MENÚ BOTONES =====
 async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -70,11 +71,12 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(texto, reply_markup=keyboard)
 
-# ===== SALUDO NUEVOS MIEMBROS =====
+
+# ===== SALUDO AUTOMÁTICO NUEVOS MIEMBROS =====
 async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.new_chat_members:
-        return
-    for user in update.message.new_chat_members:
+    # Solo saluda si alguien nuevo pasó a ser miembro
+    if update.chat_member.new_chat_member.status == "member":
+        user = update.chat_member.new_chat_member.user
         nombre = user.first_name or "amigo"
         text = (
             f"👋 ¡Hola {nombre}!\n\n"
@@ -86,6 +88,7 @@ async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=text,
             reply_markup=menu_principal()
         )
+
 
 # ===== COMANDO /START PRIVADO =====
 async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -101,6 +104,7 @@ async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=menu_principal()
     )
 
+
 # ===== INICIO =====
 if __name__ == "__main__":
     if not TOKEN:
@@ -114,7 +118,7 @@ if __name__ == "__main__":
         # Handlers
         app.add_handler(CommandHandler("start", start_comando))
         app.add_handler(CallbackQueryHandler(botones))
-        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
+        app.add_handler(ChatMemberHandler(saludar_nuevo, ChatMemberHandler.CHAT_MEMBER))
 
         # Ejecuta el bot
         app.run_polling()
