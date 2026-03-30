@@ -80,6 +80,9 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== NUEVOS MIEMBROS =====
 async def nuevo_miembro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.chat_member is None:
+        return
+
     old = update.chat_member.old_chat_member.status
     new = update.chat_member.new_chat_member.status
 
@@ -99,27 +102,29 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(botones))
 application.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
 
-# ===== WEBHOOK ROUTE =====
-@app_web.route("/", methods=["POST"])
+# ===== WEBHOOK =====
+@app_web.route("/", methods=["GET", "POST"])
 async def webhook():
+    if request.method == "GET":
+        return "Bot activo"
+
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
     await application.process_update(update)
     return "ok"
 
-# ===== CONFIGURAR WEBHOOK =====
-async def set_webhook():
+# ===== SET WEBHOOK =====
+async def init_webhook():
+    await application.bot.delete_webhook()
     await application.bot.set_webhook(url=WEBHOOK_URL)
 
-# ===== INICIO =====
+# ===== MAIN =====
 if __name__ == "__main__":
     if not TOKEN or not WEBHOOK_URL:
         print("❌ Falta TOKEN o WEBHOOK_URL")
     else:
-        print("🚀 Bot con WEBHOOK activo")
+        print("🚀 Bot webhook activo")
 
-        # Configura webhook correctamente (async)
-        asyncio.run(set_webhook())
+        asyncio.run(init_webhook())
 
-        # Ejecuta servidor Flask
         app_web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
