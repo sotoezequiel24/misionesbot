@@ -1,6 +1,5 @@
 import os
-from flask import Flask
-from threading import Thread
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -10,21 +9,10 @@ from telegram.ext import (
     ChatMemberHandler
 )
 
-# ===== TOKEN =====
 TOKEN = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # URL de Railway
 
-# ===== WEB (Railway) =====
 app_web = Flask(__name__)
-
-@app_web.route('/')
-def home():
-    return "Bot activo"
-
-def run_web():
-    app_web.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
-
-def keep_alive():
-    Thread(target=run_web).start()
 
 # ===== MENÚ =====
 def menu_principal():
@@ -47,8 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"👋 ¡Hola {nombre}!\n\n"
         "Bienvenido/a a MisionesChat.\n\n"
-        "Este bot es el acceso a los grupos por zona.\n\n"
-        "📍 Elegí tu zona para unirte:\n"
+        "📍 Elegí tu zona para unirte al grupo:"
     )
 
     await context.bot.send_message(
@@ -62,14 +49,14 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    data = query.data
-
     links = {
-        "capital": ("🟣 Zona Capital\nPosadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
-        "sur": ("🟢 Zona Sur\nCandelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
-        "norte": ("🟡 Zona Norte\nEldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
-        "este": ("🟠 Zona Este\nSan Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
+        "capital": ("🟣 Zona Capital", "https://t.me/misioneschatzonacapital"),
+        "sur": ("🟢 Zona Sur", "https://t.me/misioneschatzonasur"),
+        "norte": ("🟡 Zona Norte", "https://t.me/misioneschatzonanorte"),
+        "este": ("🟠 Zona Este", "https://t.me/misioneschatzonaeste")
     }
+
+    data = query.data
 
     if data == "volver":
         await query.edit_message_text(
@@ -95,37 +82,39 @@ async def nuevo_miembro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     old = update.chat_member.old_chat_member.status
     new = update.chat_member.new_chat_member.status
 
-    # Detecta cuando alguien entra
     if old in ["left", "kicked"] and new == "member":
         user = update.chat_member.new_chat_member.user
         nombre = user.first_name or "amigo"
 
-        text = (
-            f"👋 ¡Hola {nombre}!\n\n"
-            "Este grupo es solo de acceso.\n\n"
-            "📍 Usá el bot para elegir tu zona:\n"
-            "👉 Escribí /start\n\n"
-            "⚠️ Los chats están separados por zona."
-        )
-
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=text
+            text=f"👋 ¡Hola {nombre}! Usá el bot 👉 /start para elegir tu zona"
         )
+
+# ===== APP TELEGRAM =====
+application = ApplicationBuilder().token(TOKEN).build()
+
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(botones))
+application.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
+
+# ===== WEBHOOK ROUTE =====
+@app_web.route("/", methods=["POST"])
+async def webhook():
+    data = request.get_json(force=True)
+    update = Update.de_json(data, application.bot)
+    await application.process_update(update)
+    return "ok"
 
 # ===== INICIO =====
 if __name__ == "__main__":
     if not TOKEN:
-        print("❌ ERROR: Falta TOKEN")
+        print("❌ Falta TOKEN")
     else:
-        print("✅ Bot funcionando...")
+        print("🚀 Bot con WEBHOOK activo")
 
-        keep_alive()
+        # Configurar webhook en Telegram
+        application.bot.set_webhook(url=WEBHOOK_URL)
 
-        app = ApplicationBuilder().token(TOKEN).build()
-
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CallbackQueryHandler(botones))
-        app.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
-
-        app.run_polling()
+        # Ejecutar Flask
+        app_web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
