@@ -7,8 +7,7 @@ from telegram.ext import (
     ContextTypes,
     CommandHandler,
     CallbackQueryHandler,
-    MessageHandler,
-    filters
+    ChatMemberHandler
 )
 
 # ===== TOKEN =====
@@ -27,7 +26,7 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
-# ===== MENÚ PRINCIPAL =====
+# ===== MENÚ =====
 def menu_principal():
     keyboard = [
         [
@@ -41,17 +40,35 @@ def menu_principal():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# ===== /start =====
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nombre = update.effective_user.first_name or "amigo"
+
+    text = (
+        f"👋 ¡Hola {nombre}!\n\n"
+        "Bienvenido/a a MisionesChat.\n\n"
+        "Este bot es el acceso a los grupos por zona.\n\n"
+        "📍 Elegí tu zona para unirte:\n"
+    )
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        reply_markup=menu_principal()
+    )
+
 # ===== BOTONES =====
 async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     data = query.data
 
     links = {
-        "capital": ("🟣 Zona Capital\nIncluye: Posadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
-        "sur": ("🟢 Zona Sur\nIncluye: Candelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
-        "norte": ("🟡 Zona Norte\nIncluye: Eldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
-        "este": ("🟠 Zona Este\nIncluye: San Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
+        "capital": ("🟣 Zona Capital\nPosadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
+        "sur": ("🟢 Zona Sur\nCandelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
+        "norte": ("🟡 Zona Norte\nEldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
+        "este": ("🟠 Zona Este\nSan Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
     }
 
     if data == "volver":
@@ -63,47 +80,38 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texto, link = links.get(data, ("Error", "#"))
 
-    keyboard = InlineKeyboardMarkup([
+    keyboard = [
         [InlineKeyboardButton("✅ Unirme", url=link)],
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-    ])
+    ]
 
-    await query.edit_message_text(texto, reply_markup=keyboard)
+    await query.edit_message_text(
+        texto,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
-# ===== SALUDO NUEVOS MIEMBROS =====
-async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.new_chat_members:
-        return
-    for user in update.message.new_chat_members:
+# ===== NUEVOS MIEMBROS =====
+async def nuevo_miembro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    old = update.chat_member.old_chat_member.status
+    new = update.chat_member.new_chat_member.status
+
+    # Detecta cuando alguien entra
+    if old in ["left", "kicked"] and new == "member":
+        user = update.chat_member.new_chat_member.user
         nombre = user.first_name or "amigo"
+
         text = (
             f"👋 ¡Hola {nombre}!\n\n"
-            "Bienvenido/a al bot oficial de la comunidad MisionesChat.\n\n"
-            "📍 Por favor seleccioná tu zona para unirte al grupo correspondiente:\n"
-            "- Zona Capital: Posadas, Garupá, Fachinal\n"
-            "- Zona Sur: Candelaria, Santa Ana, Apóstoles\n"
-            "- Zona Norte: Eldorado, Montecarlo, Iguazú\n"
-            "- Zona Este: San Pedro, Irigoyen, San Antonio"
-        )
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=text,
-            reply_markup=menu_principal()
+            "Este grupo es solo de acceso.\n\n"
+            "📍 Usá el bot para elegir tu zona:\n"
+            "👉 Escribí /start\n\n"
+            "⚠️ Los chats están separados por zona."
         )
 
-# ===== COMANDO /START =====
-async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    nombre = update.effective_user.first_name or "amigo"
-    text = (
-        f"👋 ¡Hola {nombre}!\n\n"
-        "Bienvenido/a al bot oficial de MisionesChat.\n\n"
-        "📍 Seleccioná tu zona para unirte al grupo correspondiente y recibir las notificaciones:"
-    )
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=text,
-        reply_markup=menu_principal()
-    )
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=text
+        )
 
 # ===== INICIO =====
 if __name__ == "__main__":
@@ -111,14 +119,13 @@ if __name__ == "__main__":
         print("❌ ERROR: Falta TOKEN")
     else:
         print("✅ Bot funcionando...")
+
         keep_alive()
 
         app = ApplicationBuilder().token(TOKEN).build()
 
-        # Handlers
-        app.add_handler(CommandHandler("start", start_comando))
+        app.add_handler(CommandHandler("start", start))
         app.add_handler(CallbackQueryHandler(botones))
-        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
+        app.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
 
-        # Ejecuta el bot
         app.run_polling()
