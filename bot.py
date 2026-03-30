@@ -1,4 +1,5 @@
 import os
+import asyncio
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,7 +11,7 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # URL de Railway
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 app_web = Flask(__name__)
 
@@ -106,15 +107,19 @@ async def webhook():
     await application.process_update(update)
     return "ok"
 
+# ===== CONFIGURAR WEBHOOK =====
+async def set_webhook():
+    await application.bot.set_webhook(url=WEBHOOK_URL)
+
 # ===== INICIO =====
 if __name__ == "__main__":
-    if not TOKEN:
-        print("❌ Falta TOKEN")
+    if not TOKEN or not WEBHOOK_URL:
+        print("❌ Falta TOKEN o WEBHOOK_URL")
     else:
         print("🚀 Bot con WEBHOOK activo")
 
-        # Configurar webhook en Telegram
-        application.bot.set_webhook(url=WEBHOOK_URL)
+        # Configura webhook correctamente (async)
+        asyncio.run(set_webhook())
 
-        # Ejecutar Flask
+        # Ejecuta servidor Flask
         app_web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
