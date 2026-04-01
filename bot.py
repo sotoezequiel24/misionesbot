@@ -41,7 +41,7 @@ adivinar_juego = {}
 ahorcado_juego = {}
 palabras = ["misiones", "posadas", "iguazu"]
 
-# ===== ZONAS =====
+# ===== MENÚ GRUPOS =====
 def menu_principal():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🟣 Zona Capital", callback_data="capital"),
@@ -72,7 +72,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id_global = update.effective_chat.id
 
     await update.message.reply_text(
-        "📍 Elegí tu zona:",
+        "📍 Ingreso a otros grupos. Usá los botones para unirte:",
         reply_markup=menu_principal()
     )
 
@@ -82,7 +82,10 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     if q.data == "volver":
-        await q.edit_message_text("📍 Elegí tu zona:", reply_markup=menu_principal())
+        await q.edit_message_text(
+            "📍 Ingreso a otros grupos. Usá los botones para unirte:",
+            reply_markup=menu_principal()
+        )
         return
 
     await q.edit_message_text(
@@ -158,23 +161,21 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "aburrido" in texto:
         await update.message.reply_text("😏 Jugá:\n/adivinar\n/ahorcado\n/dado")
 
-# ===== LOOP AUTOMÁTICO =====
-async def loop_mensajes(app):
-    await asyncio.sleep(30)
+# ===== LOOP AUTOMÁTICO CADA 1 HORA =====
+async def mensajes_automaticos(app):
+    await asyncio.sleep(10)  # espera 10s antes del primer mensaje
     while True:
-        if chat_id_global:
-            mensajes = [
-                "😏 ¿Aburrido?\n🎯 /adivinar\n🎮 /ahorcado",
-                "🔥 Activen un juego!\n🎲 /dado",
-                "🤖 Usá /start para ver zonas"
-            ]
-
-            await app.bot.send_message(
-                chat_id=chat_id_global,
-                text=random.choice(mensajes)
+        if chat_id_global:  # solo envía si hay un grupo registrado
+            mensaje = (
+                "😏 ¡Hola! Si querés pasar el rato en la sala podes usar los comandos para jugar:\n"
+                "🎯 /adivinar - Adivinar un número\n"
+                "🎮 /ahorcado - Jugar al Ahorcado\n"
+                "🎲 /dado - Tirar un dado\n"
+                "📍 /start - Ingreso a otros grupos"
             )
+            await app.bot.send_message(chat_id=chat_id_global, text=mensaje)
 
-        await asyncio.sleep(1200)  # 20 min
+        await asyncio.sleep(3600)  # 1 hora
 
 # ===== MAIN =====
 async def main():
@@ -193,7 +194,8 @@ async def main():
     await app.initialize()
     await app.start()
 
-    asyncio.create_task(loop_mensajes(app))
+    # Inicia el loop de mensajes automáticos
+    asyncio.create_task(mensajes_automaticos(app))
 
     await app.updater.start_polling()
 
