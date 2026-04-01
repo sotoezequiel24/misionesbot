@@ -15,13 +15,13 @@ from telegram.ext import (
     filters
 )
 
-# ===== LOGS =====
+# ===== LOG =====
 logging.basicConfig(level=logging.INFO)
 
 # ===== TOKEN =====
 TOKEN = os.getenv("TOKEN")
 
-# ===== WEB (Railway) =====
+# ===== WEB (Railway keep alive) =====
 app_web = Flask(__name__)
 
 @app_web.route('/')
@@ -34,7 +34,14 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
-# ===== MENÚ ZONAS =====
+# ===== VARIABLES =====
+chat_id_global = None
+
+adivinar_juego = {}
+ahorcado_juego = {}
+palabras = ["misiones", "posadas", "iguazu"]
+
+# ===== ZONAS =====
 def menu_principal():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🟣 Zona Capital", callback_data="capital"),
@@ -43,7 +50,6 @@ def menu_principal():
          InlineKeyboardButton("🟠 Zona Centro", callback_data="centro")]
     ])
 
-# ===== LINKS =====
 links = {
     "capital": "https://t.me/misioneschatzonacapital",
     "sur": "https://t.me/+xqgDIa4CdDU1ZGQ5",
@@ -51,26 +57,19 @@ links = {
     "centro": "https://t.me/misioneschatzonacentro"
 }
 
-# ===== TEXTOS =====
 textos = {
-    "capital": "🟣 Zona Capital\n\n📍 Posadas, Garupá, Candelaria",
-    "sur": "🟢 Zona Sur\n\n🔥 Unite al grupo de tu zona",
-    "norte": "🟡 Zona Norte\n\n🔥 Unite al grupo de tu zona",
-    "centro": "🟠 Zona Centro\n\n🔥 Unite al grupo de tu zona"
+    "capital": "🟣 Zona Capital\n📍 Posadas, Garupá, Candelaria",
+    "sur": "🟢 Zona Sur\n🔥 Unite al grupo",
+    "norte": "🟡 Zona Norte\n🔥 Unite al grupo",
+    "centro": "🟠 Zona Centro\n🔥 Unite al grupo"
 }
-
-# ===== JUEGOS =====
-adivinar_juego = {}
-ahorcado_juego = {}
-palabras = ["misiones", "posadas", "iguazu"]
-
-# ===== CHAT GLOBAL =====
-chat_id_global = None
 
 # ===== START =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global chat_id_global
-    chat_id_global = update.effective_chat.id
+
+    if update.effective_chat.type in ["group", "supergroup"]:
+        chat_id_global = update.effective_chat.id
 
     await update.message.reply_text(
         "📍 Elegí tu zona:",
@@ -94,25 +93,11 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
     )
 
-# ===== AUTO MENSAJE =====
-async def mensaje_automatico(context: ContextTypes.DEFAULT_TYPE):
-    if chat_id_global:
-        mensajes = [
-            "😏 ¿Aburrido?\n🎯 /adivinar\n🎮 /ahorcado",
-            "🔥 Che activen un juego!\n🎲 /dado",
-            "🤖 Usá /start para ver zonas"
-        ]
-
-        await context.bot.send_message(
-            chat_id=chat_id_global,
-            text=random.choice(mensajes)
-        )
-
 # ===== JUEGOS =====
 async def adivinar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.id
     adivinar_juego[user] = random.randint(1, 10)
-    await update.message.reply_text("🎯 Adiviná número (1-10)")
+    await update.message.reply_text("🎯 Adiviná un número del 1 al 10")
 
 async def ahorcado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.id
@@ -161,23 +146,40 @@ async def mensajes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         estado = " ".join(juego["progreso"])
 
         if "_" not in juego["progreso"]:
-            await update.message.reply_text(f"🎉 Era {juego['palabra']}")
+            await update.message.reply_text(f"🎉 Era: {juego['palabra']}")
             del ahorcado_juego[user]
         else:
             await update.message.reply_text("🎮 " + estado)
         return
 
-    # 🤖 IA SIMPLE
+    # 🤖 RESPUESTAS SIMPLES
     if "hola" in texto:
         await update.message.reply_text("👋 Hola!")
     elif "aburrido" in texto:
         await update.message.reply_text("😏 Jugá:\n/adivinar\n/ahorcado\n/dado")
 
+# ===== LOOP AUTOMÁTICO =====
+async def loop_mensajes(app):
+    await asyncio.sleep(30)
+    while True:
+        if chat_id_global:
+            mensajes = [
+                "😏 ¿Aburrido?\n🎯 /adivinar\n🎮 /ahorcado",
+                "🔥 Activen un juego!\n🎲 /dado",
+                "🤖 Usá /start para ver zonas"
+            ]
+
+            await app.bot.send_message(
+                chat_id=chat_id_global,
+                text=random.choice(mensajes)
+            )
+
+        await asyncio.sleep(1200)  # 20 min
+
 # ===== MAIN =====
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("adivinar", adivinar))
     app.add_handler(CommandHandler("ahorcado", ahorcado))
@@ -186,13 +188,13 @@ async def main():
     app.add_handler(CallbackQueryHandler(botones))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensajes))
 
-    # ⏱ cada 20 min
-    app.job_queue.run_repeating(mensaje_automatico, interval=1200, first=30)
-
-    print("🔥 BOT FUNCIONANDO 24/7")
+    print("🔥 BOT FUNCIONANDO")
 
     await app.initialize()
     await app.start()
+
+    asyncio.create_task(loop_mensajes(app))
+
     await app.updater.start_polling()
 
     while True:
