@@ -102,16 +102,20 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(botones))
 application.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
 
-# ===== WEBHOOK =====
+# ===== WEBHOOK (FLASK SINCRÓNICO) =====
 @app_web.route("/", methods=["GET", "POST"])
-async def webhook():
+def webhook():
     if request.method == "GET":
-        return "Bot activo"
+        return "Bot activo", 200
 
     data = request.get_json(force=True)
+    print("UPDATE RECIBIDO:", data)
+
     update = Update.de_json(data, application.bot)
-    await application.process_update(update)
-    return "ok"
+
+    asyncio.run(application.process_update(update))
+
+    return "ok", 200
 
 # ===== SET WEBHOOK =====
 async def init_webhook():
@@ -125,6 +129,8 @@ if __name__ == "__main__":
     else:
         print("🚀 Bot webhook activo")
 
+        asyncio.run(application.initialize())
+        asyncio.run(application.start())
         asyncio.run(init_webhook())
 
         app_web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
