@@ -1,21 +1,33 @@
 import os
-import asyncio
-from flask import Flask, request
+from flask import Flask
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     CommandHandler,
     CallbackQueryHandler,
-    ChatMemberHandler
+    MessageHandler,
+    filters
 )
 
+# ===== TOKEN =====
 TOKEN = os.getenv("TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# ===== WEB (Railway) =====
 app_web = Flask(__name__)
 
-# ===== MENÚ =====
+@app_web.route('/')
+def home():
+    return "Bot activo"
+
+def run_web():
+    app_web.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+
+def keep_alive():
+    Thread(target=run_web).start()
+
+# ===== MENÚ PRINCIPAL =====
 def menu_principal():
     keyboard = [
         [
@@ -29,35 +41,18 @@ def menu_principal():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ===== /start =====
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    nombre = update.effective_user.first_name or "amigo"
-
-    text = (
-        f"👋 ¡Hola {nombre}!\n\n"
-        "Bienvenido/a a MisionesChat.\n\n"
-        "📍 Elegí tu zona para unirte al grupo:"
-    )
-
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=text,
-        reply_markup=menu_principal()
-    )
-
-# ===== BOTONES =====
+# ===== MENÚ BOTONES =====
 async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    data = query.data
 
     links = {
-        "capital": ("🟣 Zona Capital", "https://t.me/misioneschatzonacapital"),
-        "sur": ("🟢 Zona Sur", "https://t.me/misioneschatzonasur"),
-        "norte": ("🟡 Zona Norte", "https://t.me/misioneschatzonanorte"),
-        "este": ("🟠 Zona Este", "https://t.me/misioneschatzonaeste")
+        "capital": ("🟣 Zona Capital\n\nPosadas, Garupá, Fachinal", "https://t.me/misioneschatzonacapital"),
+        "sur": ("🟢 Zona Sur\n\nCandelaria, Santa Ana, Apóstoles", "https://t.me/misioneschatzonasur"),
+        "norte": ("🟡 Zona Norte\n\nEldorado, Montecarlo, Iguazú", "https://t.me/misioneschatzonanorte"),
+        "este": ("🟠 Zona Este\n\nSan Pedro, Irigoyen, San Antonio", "https://t.me/misioneschatzonaeste")
     }
-
-    data = query.data
 
     if data == "volver":
         await query.edit_message_text(
@@ -68,77 +63,58 @@ async def botones(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texto, link = links.get(data, ("Error", "#"))
 
-    keyboard = [
+    keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Unirme", url=link)],
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver")]
-    ]
+    ])
 
-    await query.edit_message_text(
-        texto,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await query.edit_message_text(texto, reply_markup=keyboard)
 
-# ===== NUEVOS MIEMBROS =====
-async def nuevo_miembro(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.chat_member is None:
+# ===== SALUDO NUEVOS MIEMBROS =====
+async def saludar_nuevo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.new_chat_members:
         return
-
-    old = update.chat_member.old_chat_member.status
-    new = update.chat_member.new_chat_member.status
-
-    if old in ["left", "kicked"] and new == "member":
-        user = update.chat_member.new_chat_member.user
+    for user in update.message.new_chat_members:
         nombre = user.first_name or "amigo"
-
+        text = (
+            f"👋 ¡Hola {nombre}!\n\n"
+            "Bienvenido/a a MisionesChat.\n\n"
+            "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+        )
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"👋 ¡Hola {nombre}! Usá el bot 👉 /start para elegir tu zona"
+            text=text,
+            reply_markup=menu_principal()
         )
 
-# ===== APP TELEGRAM =====
-application = ApplicationBuilder().token(TOKEN).build()
+# ===== COMANDO /START PRIVADO =====
+async def start_comando(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nombre = update.effective_user.first_name or "amigo"
+    text = (
+        f"👋 ¡Hola {nombre}!\n\n"
+        "Bienvenido/a a MisionesChat.\n\n"
+        "📍 Seleccioná tu zona para unirte al grupo correspondiente:"
+    )
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        reply_markup=menu_principal()
+    )
 
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CallbackQueryHandler(botones))
-application.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
-
-# ===== WEBHOOK =====
-@app_web.route("/", methods=["GET", "POST"])
-def webhook():
-    if request.method == "GET":
-        return "Bot activo", 200
-
-    try:
-        data = request.get_json(force=True)
-        print("UPDATE RECIBIDO:", data)
-
-        update = Update.de_json(data, application.bot)
-
-        # 🔥 FIX EVENT LOOP (clave para Railway)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(application.process_update(update))
-        loop.close()
-
-    except Exception as e:
-        print("ERROR:", e)
-
-    return "ok", 200
-
-# ===== SET WEBHOOK =====
-async def init_webhook():
-    await application.bot.delete_webhook()
-    await application.bot.set_webhook(url=WEBHOOK_URL)
-
-# ===== MAIN =====
+# ===== INICIO =====
 if __name__ == "__main__":
-    if not TOKEN or not WEBHOOK_URL:
-        print("❌ Falta TOKEN o WEBHOOK_URL")
+    if not TOKEN:
+        print("❌ ERROR: Falta TOKEN")
     else:
-        print("🚀 Bot webhook activo")
+        print("✅ Bot funcionando...")
+        keep_alive()
 
-        asyncio.run(application.initialize())
-        asyncio.run(application.start())
-        asyncio.run(init_webhook())
+        app = ApplicationBuilder().token(TOKEN).build()
 
-        app_web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+        # Handlers
+        app.add_handler(CommandHandler("start", start_comando))
+        app.add_handler(CallbackQueryHandler(botones))
+        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, saludar_nuevo))
+
+        # Ejecuta el bot
+        app.run_polling()
