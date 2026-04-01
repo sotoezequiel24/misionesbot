@@ -102,18 +102,26 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(CallbackQueryHandler(botones))
 application.add_handler(ChatMemberHandler(nuevo_miembro, ChatMemberHandler.CHAT_MEMBER))
 
-# ===== WEBHOOK (FLASK SINCRÓNICO) =====
+# ===== WEBHOOK =====
 @app_web.route("/", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
         return "Bot activo", 200
 
-    data = request.get_json(force=True)
-    print("UPDATE RECIBIDO:", data)
+    try:
+        data = request.get_json(force=True)
+        print("UPDATE RECIBIDO:", data)
 
-    update = Update.de_json(data, application.bot)
+        update = Update.de_json(data, application.bot)
 
-    asyncio.run(application.process_update(update))
+        # 🔥 FIX EVENT LOOP (clave para Railway)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(application.process_update(update))
+        loop.close()
+
+    except Exception as e:
+        print("ERROR:", e)
 
     return "ok", 200
 
