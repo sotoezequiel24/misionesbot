@@ -175,7 +175,7 @@ async def mensajes_automaticos(app):
             )
             await app.bot.send_message(chat_id=chat_id_global, text=mensaje)
 
-        await asyncio.sleep(3600)  # 1 hora
+        await asyncio.sleep(3600)  # 4 horas
 
 # ===== MAIN =====
 async def main():
